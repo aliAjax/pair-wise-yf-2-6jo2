@@ -5,8 +5,9 @@ import BenchCard from '@/components/BenchCard/BenchCard';
 import { Armchair } from 'lucide-react';
 
 export default function ListPage() {
-  const { benches, getFilteredBenches, initialize, initialized } = useBenchStore();
+  const { getFilteredBenches, getVisibleBenches, initialize, initialized } = useBenchStore();
   const filteredBenches = getFilteredBenches();
+  const visibleCount = getVisibleBenches().length;
 
   useEffect(() => {
     if (!initialized) {
@@ -39,11 +40,11 @@ export default function ListPage() {
             <Armchair className="w-8 h-8 text-moss-green/50" />
           </div>
           <h3 className="font-serif text-lg font-medium text-deep-brown mb-2">
-            {benches.length === 0 ? '还没有长椅档案' : '没有找到匹配的长椅'}
+            {visibleCount === 0 ? '还没有公开的长椅档案' : '没有找到匹配的长椅'}
           </h3>
           <p className="text-ink-light text-sm">
-            {benches.length === 0
-              ? '点击右上角的添加按钮，记录第一张长椅档案吧'
+            {visibleCount === 0
+              ? '新导入的档案核对通过后才会公开，可前往交接中心查看'
               : '试试调整筛选条件或搜索关键词'}
           </p>
         </div>

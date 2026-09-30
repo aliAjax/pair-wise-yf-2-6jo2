@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check": "tsc -b --noEmit"
+    "check": "tsc -b --noEmit",
+    "verify:merge": "esbuild scripts/verify-merge.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/verify-merge.mjs --log-level=warning && node node_modules/.tmp/verify-merge.mjs",
+    "verify:e2e": "esbuild scripts/verify-e2e.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/verify-e2e.mjs --log-level=warning && node node_modules/.tmp/verify-e2e.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

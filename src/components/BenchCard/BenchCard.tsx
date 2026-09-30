@@ -1,9 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Volume2, Sun, Armchair } from 'lucide-react';
+import { MapPin, Clock, Volume2, Sun, Armchair, AlertTriangle } from 'lucide-react';
 import type { Bench } from '@/types';
 import { MATERIAL_LABELS, SHADE_LABELS, NOISE_LABELS, STAY_DURATION_LABELS } from '@/types';
 import Rating from '@/components/Rating/Rating';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
+import { useBenchStore } from '@/store/useBenchStore';
 
 interface BenchCardProps {
   bench: Bench;
@@ -12,6 +13,9 @@ interface BenchCardProps {
 
 export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
   const navigate = useNavigate();
+  const hasConflict = useBenchStore(
+    (s) => s.db?.conflicts.some((c) => c.benchId === bench.id) ?? false,
+  );
   const comfortScore = calculateComfortScore(bench);
   const comfortLevel = getComfortLevel(comfortScore);
   const comfortColor = getComfortColor(comfortScore);
@@ -21,7 +25,9 @@ export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
   return (
     <div
       onClick={() => navigate(`/bench/${bench.id}`)}
-      className={`paper-texture rounded-xl shadow-card card-hover cursor-pointer overflow-hidden fade-in opacity-0 ${staggerClass}`}
+      className={`paper-texture rounded-xl shadow-card card-hover cursor-pointer overflow-hidden fade-in opacity-0 ${staggerClass} ${
+        hasConflict ? 'ring-2 ring-ochre/40' : ''
+      }`}
     >
       <div className="h-36 bg-gradient-to-br from-warm-cream to-warm-beige relative overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
@@ -29,10 +35,23 @@ export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
             <Armchair className="w-10 h-10 text-moss-green/50" />
           </div>
         </div>
-        
-        <div className="absolute top-3 right-3 px-2 py-1 bg-white/80 backdrop-blur-sm rounded-full text-xs font-medium">
-          <span className={comfortColor}>{comfortLevel}</span>
-          <span className="text-ink-light ml-1">{comfortScore}</span>
+
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
+          <div className="px-2 py-1 bg-white/80 backdrop-blur-sm rounded-full text-xs font-medium">
+            <span className={comfortColor}>{comfortLevel}</span>
+            <span className="text-ink-light ml-1">{comfortScore}</span>
+          </div>
+          {hasConflict && (
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-ochre text-white rounded-full text-[10px] font-medium">
+              <AlertTriangle className="w-3 h-3" />
+              待核对
+            </div>
+          )}
+          {!hasConflict && bench.reviewed === false && (
+            <div className="px-2 py-0.5 bg-deep-brown/70 text-white rounded-full text-[10px]">
+              未公开
+            </div>
+          )}
         </div>
 
         <div className="absolute top-3 left-3 px-2 py-1 bg-white/80 backdrop-blur-sm rounded-full text-xs text-ink-light">

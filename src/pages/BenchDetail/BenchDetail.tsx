@@ -14,6 +14,9 @@ import {
   Sunset,
   Moon,
   CloudSun,
+  AlertTriangle,
+  ShieldCheck,
+  Eye,
 } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
 import {
@@ -31,7 +34,7 @@ import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils
 export default function BenchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getBenchById, deleteBench, initialize, initialized } = useBenchStore();
+  const { getBenchById, getConflict, deleteBench, initialize, initialized, db } = useBenchStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
@@ -41,6 +44,8 @@ export default function BenchDetail() {
   }, [initialized, initialize]);
 
   const bench = id ? getBenchById(id) : undefined;
+  const conflict = id ? getConflict(id) : undefined;
+  const isViewer = db?.role === 'viewer';
 
   useEffect(() => {
     if (bench === undefined && initialized) {
@@ -48,11 +53,31 @@ export default function BenchDetail() {
     }
   }, [bench, initialized, navigate]);
 
-  if (!bench) {
+  if (!bench || !db) {
     return (
       <div className="container mx-auto px-4 py-6">
         <div className="text-center py-12">
           <p className="text-ink-light">加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 浏览者不能直达未核对档案
+  if (isViewer && bench.reviewed !== true) {
+    return (
+      <div className="container mx-auto px-4 py-6 max-w-xl">
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 text-ink-light hover:text-deep-brown mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-sm">返回列表</span>
+        </button>
+        <div className="paper-texture rounded-xl shadow-paper p-12 text-center">
+          <Eye className="w-10 h-10 text-ochre/50 mx-auto mb-3" />
+          <h3 className="font-serif text-lg font-medium text-deep-brown mb-2">该档案尚未公开</h3>
+          <p className="text-ink-light text-sm">巡查员核对通过后，普通浏览者才能看到这条长椅。</p>
         </div>
       </div>
     );
@@ -94,6 +119,26 @@ export default function BenchDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {conflict && (
+            <div className="rounded-xl bg-ochre/10 border border-ochre/30 p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-ochre flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-serif font-semibold text-deep-brown text-sm mb-1">
+                  该长椅有 {Object.keys(conflict.fields).length} 个字段待核对
+                </h3>
+                <p className="text-xs text-ink-light mb-2">
+                  本机 r{conflict.localRev} 与 {conflict.incomingInspector} 提交的 r{conflict.incomingRev} 在相同字段上都有修改，两版均已保留。
+                </p>
+                <button
+                  onClick={() => navigate(`/review/${bench.id}`)}
+                  className="text-sm text-moss-green font-medium hover:underline"
+                >
+                  前往逐字段核对 →
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="paper-texture rounded-xl shadow-paper overflow-hidden fade-in opacity-0 stagger-1">
             <div className="h-48 bg-gradient-to-br from-warm-cream via-warm-beige to-moss-green/10 relative">
               <div className="absolute inset-0 flex items-center justify-center">
@@ -182,104 +227,162 @@ export default function BenchDetail() {
               </div>
 
               <div className="mb-6">
-                <h3 className="font-serif font-semibold text-deep-brown mb-2">个人评价</h3>
-                <p className="text-ink-light leading-relaxed">{bench.review}</p>
+                <h3 className="font-serif font-semibold text-deep-brown mb-2">
+                  {isViewer ? '公开备注' : '个人评价'}
+                </h3>
+                {isViewer ? (
+                  <p className="text-ink-light leading-relaxed">{bench.publicNotes || '（暂无公开备注）'}</p>
+                ) : (
+                  <>
+                    <p className="text-ink-light leading-relaxed">{bench.review}</p>
+                    {bench.reviewed && bench.publicNotes && bench.publicNotes !== bench.review && (
+                      <div className="mt-3 p-3 bg-moss-green/5 rounded-lg">
+                        <div className="flex items-center gap-1.5 text-xs text-moss-green mb-1">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          公开备注（浏览者所见）
+                        </div>
+                        <p className="text-sm text-ink-light">{bench.publicNotes}</p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
-              <div className="flex items-center gap-4 pt-4 border-t border-deep-brown/10">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-ink-light">评分</span>
-                  <Rating value={bench.rating} readOnly />
+              {!isViewer && (
+                <div className="flex items-center gap-4 pt-4 border-t border-deep-brown/10">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-ink-light">评分</span>
+                    <Rating value={bench.rating} readOnly />
+                  </div>
+
+                  <div className="flex-1" />
+
+                  <button
+                    onClick={() => navigate(`/edit/${bench.id}`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-moss-green hover:bg-moss-green/10 rounded-lg transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    编辑
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    删除
+                  </button>
                 </div>
-
-                <div className="flex-1" />
-
-                <button
-                  onClick={() => navigate(`/edit/${bench.id}`)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-moss-green hover:bg-moss-green/10 rounded-lg transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  编辑
-                </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  删除
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="space-y-6">
-          <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-2">
-            <h2 className="font-serif text-lg font-semibold text-deep-brown mb-4">
-              分时段体验
-            </h2>
+          {!isViewer && (
+            <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-2">
+              <h2 className="font-serif text-lg font-semibold text-deep-brown mb-4">
+                分时段体验
+              </h2>
 
-            {sortedExperiences.length > 0 ? (
-              <div className="space-y-4">
-                {sortedExperiences.map((experience) => {
-                  const TimeIcon = timePeriodIcons[experience.timePeriod];
-                  return (
-                    <div
-                      key={experience.id}
-                      className="p-4 bg-warm-cream/50 rounded-lg hover:bg-warm-cream transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <TimeIcon className="w-4 h-4 text-ochre" />
-                          <span className="font-medium text-deep-brown text-sm">
-                            {TIME_PERIOD_LABELS[experience.timePeriod]}
-                          </span>
+              {sortedExperiences.length > 0 ? (
+                <div className="space-y-4">
+                  {sortedExperiences.map((experience) => {
+                    const TimeIcon = timePeriodIcons[experience.timePeriod];
+                    return (
+                      <div
+                        key={experience.id}
+                        className="p-4 bg-warm-cream/50 rounded-lg hover:bg-warm-cream transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <TimeIcon className="w-4 h-4 text-ochre" />
+                            <span className="font-medium text-deep-brown text-sm">
+                              {TIME_PERIOD_LABELS[experience.timePeriod]}
+                            </span>
+                          </div>
+                          <Rating value={experience.rating} readOnly size="sm" />
                         </div>
-                        <Rating value={experience.rating} readOnly size="sm" />
+                        <p className="text-sm text-ink-light leading-relaxed">
+                          {experience.notes}
+                        </p>
                       </div>
-                      <p className="text-sm text-ink-light leading-relaxed">
-                        {experience.notes}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-12 h-12 rounded-full bg-moss-green/10 flex items-center justify-center mx-auto mb-3">
-                  <Clock className="w-6 h-6 text-moss-green/50" />
+                    );
+                  })}
                 </div>
-                <p className="text-sm text-ink-light">
-                  还没有分时段体验记录
-                </p>
-                <p className="text-xs text-ink-light/60 mt-1">
-                  编辑长椅时可以添加
-                </p>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 rounded-full bg-moss-green/10 flex items-center justify-center mx-auto mb-3">
+                    <Clock className="w-6 h-6 text-moss-green/50" />
+                  </div>
+                  <p className="text-sm text-ink-light">还没有分时段体验记录</p>
+                  <p className="text-xs text-ink-light/60 mt-1">编辑长椅时可以添加</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isViewer && (
+            <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-2">
+              <div className="flex items-center gap-2 mb-3">
+                <Eye className="w-4 h-4 text-ochre" />
+                <h2 className="font-serif text-lg font-semibold text-deep-brown">公开信息</h2>
               </div>
-            )}
-          </div>
+              <p className="text-sm text-ink-light leading-relaxed mb-4">
+                {bench.publicNotes || '（暂无公开备注）'}
+              </p>
+              <div className="flex items-center gap-2 text-sm text-ink-light">
+                <span>综合评分</span>
+                <Rating value={bench.rating} readOnly size="sm" />
+              </div>
+            </div>
+          )}
 
           <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-3">
             <h3 className="font-serif text-sm font-semibold text-deep-brown mb-3">
-              档案信息
+              {isViewer ? '公开统计' : '档案信息'}
             </h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-ink-light">创建时间</span>
-                <span className="text-deep-brown">
-                  {new Date(bench.createdAt).toLocaleDateString('zh-CN')}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-ink-light">更新时间</span>
-                <span className="text-deep-brown">
-                  {new Date(bench.updatedAt).toLocaleDateString('zh-CN')}
-                </span>
+                <span className="text-ink-light">舒适度评分</span>
+                <span className={`font-medium ${comfortColor}`}>{comfortScore} · {comfortLevel}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-ink-light">时段记录</span>
-                <span className="text-deep-brown">{bench.experiences.length} 条</span>
+                <span className="text-deep-brown">
+                  {isViewer ? '—' : `${bench.experiences.length} 条`}
+                </span>
               </div>
+              {!isViewer && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-ink-light">稳定编号</span>
+                    <span className="text-deep-brown text-xs">{bench.id.slice(0, 12)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-light">修订号</span>
+                    <span className="text-deep-brown">r{bench.rev ?? 1}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-light">最后修改</span>
+                    <span className="text-deep-brown text-xs">
+                      {bench.lastEditor ?? '—'}
+                      {bench.reviewed ? ' · 已核对公开' : ' · 待核对'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-light">创建时间</span>
+                    <span className="text-deep-brown">
+                      {new Date(bench.createdAt).toLocaleDateString('zh-CN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-light">更新时间</span>
+                    <span className="text-deep-brown">
+                      {new Date(bench.updatedAt).toLocaleDateString('zh-CN')}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
