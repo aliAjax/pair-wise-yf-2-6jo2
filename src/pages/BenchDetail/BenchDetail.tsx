@@ -27,11 +27,12 @@ import {
 import type { TimePeriodType } from '@/types';
 import Rating from '@/components/Rating/Rating';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
+import { GitMerge, Lock } from 'lucide-react';
 
 export default function BenchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getBenchById, deleteBench, initialize, initialized } = useBenchStore();
+  const { getBenchById, deleteBench, initialize, initialized, role, pendingImports } = useBenchStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
@@ -41,6 +42,8 @@ export default function BenchDetail() {
   }, [initialized, initialize]);
 
   const bench = id ? getBenchById(id) : undefined;
+  const pendingConflict = pendingImports.find((p) => p.id === id);
+  const isInspector = role === 'inspector';
 
   useEffect(() => {
     if (bench === undefined && initialized) {
@@ -91,6 +94,23 @@ export default function BenchDetail() {
         <ArrowLeft className="w-4 h-4" />
         <span className="text-sm">返回</span>
       </button>
+
+      {isInspector && pendingConflict && (
+        <button
+          onClick={() => navigate('/review')}
+          className="w-full mb-6 flex items-center gap-3 px-4 py-3 bg-ochre/10 border border-ochre/30 rounded-xl text-left hover:bg-ochre/15 transition-colors"
+        >
+          <GitMerge className="w-5 h-5 text-ochre flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-deep-brown">
+              该长椅有 {pendingConflict.conflicts.length} 个字段在离线交接中双方都做了修改
+            </p>
+            <p className="text-xs text-ink-light mt-0.5">
+              当前显示主档版本，点击前往核对采用哪一版
+            </p>
+          </div>
+        </button>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -182,9 +202,21 @@ export default function BenchDetail() {
               </div>
 
               <div className="mb-6">
-                <h3 className="font-serif font-semibold text-deep-brown mb-2">个人评价</h3>
+                <h3 className="font-serif font-semibold text-deep-brown mb-2">公开备注</h3>
                 <p className="text-ink-light leading-relaxed">{bench.review}</p>
               </div>
+
+              {isInspector && (
+                <div className="mb-6 p-4 bg-ochre/5 border border-ochre/20 rounded-lg">
+                  <h3 className="font-serif font-semibold text-deep-brown mb-2 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-ochre" />
+                    内部备注（仅巡查员可见）
+                  </h3>
+                  <p className="text-ink-light leading-relaxed text-sm">
+                    {bench.internalReview?.trim() ? bench.internalReview : '（暂无内部备注）'}
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center gap-4 pt-4 border-t border-deep-brown/10">
                 <div className="flex items-center gap-2">
@@ -194,20 +226,24 @@ export default function BenchDetail() {
 
                 <div className="flex-1" />
 
-                <button
-                  onClick={() => navigate(`/edit/${bench.id}`)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-moss-green hover:bg-moss-green/10 rounded-lg transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  编辑
-                </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  删除
-                </button>
+                {isInspector && (
+                  <>
+                    <button
+                      onClick={() => navigate(`/edit/${bench.id}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-moss-green hover:bg-moss-green/10 rounded-lg transition-colors"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      编辑
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      删除
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -265,6 +301,10 @@ export default function BenchDetail() {
             </h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
+                <span className="text-ink-light">修订号</span>
+                <span className="text-deep-brown font-medium">v{bench.revision}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-ink-light">创建时间</span>
                 <span className="text-deep-brown">
                   {new Date(bench.createdAt).toLocaleDateString('zh-CN')}
@@ -276,6 +316,12 @@ export default function BenchDetail() {
                   {new Date(bench.updatedAt).toLocaleDateString('zh-CN')}
                 </span>
               </div>
+              {bench.lastModifiedBy && (
+                <div className="flex justify-between">
+                  <span className="text-ink-light">最后修改</span>
+                  <span className="text-deep-brown">{bench.lastModifiedBy}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-ink-light">时段记录</span>
                 <span className="text-deep-brown">{bench.experiences.length} 条</span>

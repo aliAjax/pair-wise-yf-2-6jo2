@@ -3,6 +3,7 @@ import type { Bench } from '@/types';
 export const mockBenches: Bench[] = [
   {
     id: 'bench-001',
+    revision: 1,
     name: '梧桐树下的老长椅',
     location: '人民公园东门北侧',
     lat: 31.2304,
@@ -43,6 +44,7 @@ export const mockBenches: Bench[] = [
   },
   {
     id: 'bench-002',
+    revision: 1,
     name: '江边金属长椅',
     location: '滨江大道观景台旁',
     lat: 31.2350,
@@ -83,6 +85,7 @@ export const mockBenches: Bench[] = [
   },
   {
     id: 'bench-003',
+    revision: 1,
     name: '小区门口石凳',
     location: '阳光小区正门西侧',
     lat: 31.2280,
@@ -109,6 +112,7 @@ export const mockBenches: Bench[] = [
   },
   {
     id: 'bench-004',
+    revision: 1,
     name: '图书馆外木椅',
     location: '市图书馆南门廊下',
     lat: 31.2400,
@@ -142,6 +146,7 @@ export const mockBenches: Bench[] = [
   },
   {
     id: 'bench-005',
+    revision: 1,
     name: '商业街塑料椅',
     location: '步行街中央广场',
     lat: 31.2330,
@@ -168,6 +173,7 @@ export const mockBenches: Bench[] = [
   },
   {
     id: 'bench-006',
+    revision: 1,
     name: '校园林荫道长椅',
     location: '大学林荫道中段',
     lat: 31.2380,

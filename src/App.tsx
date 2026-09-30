@@ -5,6 +5,7 @@ import MapPage from '@/pages/MapPage/MapPage';
 import RankingPage from '@/pages/RankingPage/RankingPage';
 import BenchDetail from '@/pages/BenchDetail/BenchDetail';
 import AddEditPage from '@/pages/AddEditPage/AddEditPage';
+import ReviewQueue from '@/pages/ReviewQueue/ReviewQueue';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/bench/:id" element={<BenchDetail />} />
             <Route path="/add" element={<AddEditPage />} />
             <Route path="/edit/:id" element={<AddEditPage />} />
+            <Route path="/review" element={<ReviewQueue />} />
           </Routes>
         </main>
       </div>

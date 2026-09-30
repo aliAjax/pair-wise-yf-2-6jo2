@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -10,6 +10,9 @@ import {
   Sunset,
   Moon,
   CloudSun,
+  AlertTriangle,
+  RefreshCw,
+  Lock,
 } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
 import {
@@ -37,8 +40,13 @@ export default function AddEditPage() {
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const { getBenchById, addBench, updateBench, initialize, initialized, addExperience, updateExperience, deleteExperience } = useBenchStore();
+  const { getBenchById, addBench, updateBench, initialize, initialized, role } = useBenchStore();
   const existingBench = id ? getBenchById(id) : undefined;
+  const isInspector = role === 'inspector';
+
+  // 进入编辑时读取的修订号，用于乐观锁
+  const loadedRevisionRef = useRef<number | undefined>(undefined);
+  const [conflictRevision, setConflictRevision] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -53,6 +61,7 @@ export default function AddEditPage() {
     stayDuration: 'medium' as StayDurationType,
     rating: 3,
     review: '',
+    internalReview: '',
   });
 
   const [experiences, setExperiences] = useState<BenchExperience[]>([]);
@@ -63,8 +72,15 @@ export default function AddEditPage() {
     }
   }, [initialized, initialize]);
 
+  // 浏览者无权添加/编辑
+  useEffect(() => {
+    if (initialized && !isInspector) navigate('/');
+  }, [initialized, isInspector, navigate]);
+
   useEffect(() => {
     if (isEdit && existingBench && initialized) {
+      loadedRevisionRef.current = existingBench.revision;
+      setConflictRevision(null);
       setFormData({
         name: existingBench.name,
         location: existingBench.location,
@@ -78,10 +94,26 @@ export default function AddEditPage() {
         stayDuration: existingBench.stayDuration,
         rating: existingBench.rating,
         review: existingBench.review,
+        internalReview: existingBench.internalReview ?? '',
       });
       setExperiences(existingBench.experiences || []);
     }
   }, [isEdit, existingBench, initialized]);
+
+  // 监听其他页签/导入带来的修订号变化
+  useEffect(() => {
+    if (!isEdit || !existingBench) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'bench-archive-data') {
+        const latest = useBenchStore.getState().benches.find((b) => b.id === id);
+        if (latest && loadedRevisionRef.current !== undefined && latest.revision > loadedRevisionRef.current) {
+          setConflictRevision(latest.revision);
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [isEdit, existingBench, id]);
 
   const handleChange = (field: string, value: string | number | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -108,14 +140,36 @@ export default function AddEditPage() {
 
   const handleDeleteExperience = (expId: string) => {
     setExperiences(experiences.filter((exp) => exp.id !== expId));
-    if (isEdit && id) {
-      deleteExperience(id, expId);
+  };
+
+  const reloadFromStore = () => {
+    if (!id) return;
+    const latest = useBenchStore.getState().benches.find((b) => b.id === id);
+    if (latest) {
+      loadedRevisionRef.current = latest.revision;
+      setConflictRevision(null);
+      setFormData({
+        name: latest.name,
+        location: latest.location,
+        lat: latest.lat,
+        lng: latest.lng,
+        material: latest.material,
+        orientation: latest.orientation,
+        hasBackrest: latest.hasBackrest,
+        shadeLevel: latest.shadeLevel,
+        noiseLevel: latest.noiseLevel,
+        stayDuration: latest.stayDuration,
+        rating: latest.rating,
+        review: latest.review,
+        internalReview: latest.internalReview ?? '',
+      });
+      setExperiences(latest.experiences || []);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       alert('请输入长椅名称');
       return;
@@ -126,18 +180,23 @@ export default function AddEditPage() {
     }
 
     if (isEdit && id) {
-      updateBench(id, formData);
-      experiences.forEach((exp) => {
-        const existingExp = existingBench?.experiences.find((e) => e.id === exp.id);
-        if (existingExp) {
-          updateExperience(id, exp.id, exp);
-        } else {
-          addExperience(id, exp);
+      // 一次性提交基本信息 + 时段体验，修订号只 +1
+      const result = updateBench(
+        id,
+        { ...formData, experiences },
+        loadedRevisionRef.current,
+      );
+      if (result.ok === false) {
+        // 后到的一方看到版本冲突
+        if (result.reason === 'conflict') {
+          setConflictRevision(result.currentRevision);
         }
-      });
+        return;
+      }
     } else {
       addBench({
         ...formData,
+        experiences,
       });
     }
 
@@ -167,7 +226,30 @@ export default function AddEditPage() {
           {isEdit ? '编辑长椅档案' : '添加长椅档案'}
         </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        {conflictRevision !== null && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-700">保存失败：版本冲突</p>
+                <p className="text-sm text-red-600/90 mt-1">
+                  该长椅在你打开后已被其他页签或导入操作修改（修订号已更新到 v{conflictRevision}）。
+                  为避免覆盖他人的修改，本次保存未生效。请重新加载最新版本后再编辑。
+                </p>
+                <button
+                  type="button"
+                  onClick={reloadFromStore}
+                  className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  重新加载最新版本
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className={`space-y-6 ${conflictRevision !== null ? 'pointer-events-none opacity-60' : ''}`}>
           <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-1">
             <h2 className="font-serif text-lg font-semibold text-deep-brown mb-4">
               基本信息
@@ -369,16 +451,33 @@ export default function AddEditPage() {
 
               <div>
                 <label className="block text-sm font-medium text-deep-brown mb-1.5">
-                  评价文字
+                  公开备注
                 </label>
                 <textarea
                   value={formData.review}
                   onChange={(e) => handleChange('review', e.target.value)}
-                  placeholder="写下你对这张长椅的感受..."
+                  placeholder="写下你对这张长椅的感受（普通浏览者可见）..."
                   rows={4}
                   className="w-full px-4 py-2.5 bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown placeholder:text-ink-light/60 focus:bg-white transition-colors resize-none"
                 />
               </div>
+
+              {isInspector && (
+                <div>
+                  <label className="block text-sm font-medium text-deep-brown mb-1.5 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-ochre" />
+                    内部备注
+                    <span className="text-xs font-normal text-ink-light">（仅巡查员可见，不对外公开）</span>
+                  </label>
+                  <textarea
+                    value={formData.internalReview}
+                    onChange={(e) => handleChange('internalReview', e.target.value)}
+                    placeholder="记录巡查内部信息，如维护建议、私下观察..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 bg-ochre/5 border border-ochre/20 rounded-lg text-deep-brown placeholder:text-ink-light/50 focus:bg-white transition-colors resize-none"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -399,7 +498,7 @@ export default function AddEditPage() {
 
             {experiences.length > 0 ? (
               <div className="space-y-4">
-                {experiences.map((exp, index) => {
+                {experiences.map((exp) => {
                   const TimeIcon = timePeriodIcons[exp.timePeriod];
                   return (
                     <div
